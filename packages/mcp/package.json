@@ -1,0 +1,28 @@
+{
+  "name": "@curve-studio/mcp",
+  "version": "0.1.0",
+  "description": "Model Context Protocol (MCP) server for Curve Studio",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "curve-studio-mcp": "./dist/bin.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/bin.js"
+  },
+  "dependencies": {
+    "@curve-studio/chain": "workspace:*",
+    "@curve-studio/core": "workspace:*",
+    "@curve-studio/presets": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.6.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.9",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.7"
+  }
+}
