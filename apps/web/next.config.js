@@ -4,6 +4,7 @@ const nextConfig = {
     "@curve-studio/core",
     "@curve-studio/presets",
     "@curve-studio/chain",
+    "@curve-studio/ui",
     "@solana/wallet-adapter-base",
     "@solana/wallet-adapter-react",
     "@solana/wallet-adapter-react-ui",
