@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "description": "Curve Studio: Toolkit for Meteora Dynamic Bonding Curves (DBC), DAMM v2, and DLMM",
   "scripts": {
-    "build": "turbo run build",
+    "build": "turbo run build --filter=@curve-studio/web",
+    "build:all": "turbo run build",
     "test": "turbo run test",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",

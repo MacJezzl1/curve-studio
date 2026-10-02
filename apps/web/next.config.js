@@ -10,6 +10,11 @@ const nextConfig = {
     "@solana/wallet-adapter-react-ui",
   ],
   webpack: (config) => {
+    config.resolve.extensionAlias = {
+      '.js': ['.ts', '.tsx', '.js', '.jsx'],
+      '.mjs': ['.mts', '.mjs'],
+      '.cjs': ['.cts', '.cjs'],
+    };
     config.resolve.fallback = {
       ...config.resolve.fallback,
       fs: false,

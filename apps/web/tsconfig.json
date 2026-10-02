@@ -19,7 +19,11 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@curve-studio/core": ["../../packages/core/src/index.ts"],
+      "@curve-studio/presets": ["../../packages/presets/src/index.ts"],
+      "@curve-studio/chain": ["../../packages/chain/src/index.ts"],
+      "@curve-studio/ui": ["../../packages/ui/src/index.ts"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

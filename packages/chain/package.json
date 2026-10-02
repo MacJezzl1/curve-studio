@@ -3,7 +3,15 @@
   "version": "0.1.0",
   "description": "Solana blockchain adapters and transaction builders for Meteora DBC, DAMM v2, and DLMM",
   "main": "./dist/index.js",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
