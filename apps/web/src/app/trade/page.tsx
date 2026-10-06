@@ -92,8 +92,19 @@ export default function TradePage() {
         slippageBps,
       });
 
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+      res.transaction.recentBlockhash = blockhash;
+      res.transaction.feePayer = publicKey;
+
       const sig = await sendTransaction(res.transaction, connection);
-      await connection.confirmTransaction(sig, "confirmed");
+      await connection.confirmTransaction(
+        {
+          signature: sig,
+          blockhash,
+          lastValidBlockHeight,
+        },
+        "confirmed"
+      );
       setTxSig(sig);
     } catch (err: any) {
       console.error("Swap error:", err);
@@ -131,8 +142,26 @@ export default function TradePage() {
         dammConfig,
       });
 
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+      res.transaction.recentBlockhash = blockhash;
+      res.transaction.feePayer = publicKey;
+
+      if (res.firstPositionNftKeypair) {
+        res.transaction.partialSign(res.firstPositionNftKeypair);
+      }
+      if (res.secondPositionNftKeypair) {
+        res.transaction.partialSign(res.secondPositionNftKeypair);
+      }
+
       const sig = await sendTransaction(res.transaction, connection);
-      await connection.confirmTransaction(sig, "confirmed");
+      await connection.confirmTransaction(
+        {
+          signature: sig,
+          blockhash,
+          lastValidBlockHeight,
+        },
+        "confirmed"
+      );
       setMigrateSig(sig);
     } catch (err: any) {
       console.error("Migration error:", err);

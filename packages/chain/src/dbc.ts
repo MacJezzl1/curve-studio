@@ -197,6 +197,12 @@ export class DbcAdapter {
     });
 
     createConfigTx.feePayer = params.payer;
+    try {
+      const latestBlockhash = await this.connection.getLatestBlockhash("confirmed");
+      createConfigTx.recentBlockhash = latestBlockhash.blockhash;
+    } catch {
+      // Offline fallback: will be assigned by caller before signing
+    }
 
     return {
       transaction: createConfigTx,
@@ -233,6 +239,12 @@ export class DbcAdapter {
     });
 
     createPoolTx.feePayer = params.payer;
+    try {
+      const latestBlockhash = await this.connection.getLatestBlockhash("confirmed");
+      createPoolTx.recentBlockhash = latestBlockhash.blockhash;
+    } catch {
+      // Offline fallback: will be assigned by caller before signing
+    }
     const poolAddress = deriveDbcPoolAddress(
       quoteMint,
       baseMintKeypair.publicKey,
@@ -301,6 +313,12 @@ export class DbcAdapter {
     });
 
     swapTx.feePayer = payer;
+    try {
+      const latestBlockhash = await this.connection.getLatestBlockhash("confirmed");
+      swapTx.recentBlockhash = latestBlockhash.blockhash;
+    } catch {
+      // Offline fallback: will be assigned by caller
+    }
 
     return {
       transaction: swapTx,
@@ -382,6 +400,12 @@ export class DbcAdapter {
     }
 
     tx.feePayer = params.payer;
+    try {
+      const latestBlockhash = await this.connection.getLatestBlockhash("confirmed");
+      tx.recentBlockhash = latestBlockhash.blockhash;
+    } catch {
+      // Offline fallback: will be assigned by caller
+    }
     return { transaction: tx };
   }
 
@@ -432,6 +456,12 @@ export class DbcAdapter {
     });
 
     res.transaction.feePayer = params.payer;
+    try {
+      const latestBlockhash = await this.connection.getLatestBlockhash("confirmed");
+      res.transaction.recentBlockhash = latestBlockhash.blockhash;
+    } catch {
+      // Offline fallback: will be assigned by caller
+    }
     return {
       transaction: res.transaction,
       firstPositionNftKeypair: res.firstPositionNftKeypair,

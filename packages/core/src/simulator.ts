@@ -79,6 +79,11 @@ export function simulateTrades(
           seg.liquidity
         );
 
+        if (maxQuoteInSeg.isZero()) {
+          currentSegmentIdx++;
+          continue;
+        }
+
         if (remainingNetQuote.gte(maxQuoteInSeg)) {
           // Cross entire segment
           const baseOut = getBaseAmountForLiquidity(
@@ -114,9 +119,24 @@ export function simulateTrades(
         }
       }
 
-      totalVolumeQuote = totalVolumeQuote.add(amountInRemaining);
-      walletBalances[walletId]!.base = walletBalances[walletId]!.base.add(totalAmountOut);
-      walletBalances[walletId]!.quoteSpent = walletBalances[walletId]!.quoteSpent.add(amountInRemaining);
+      if (baseReserve.isNeg()) {
+        baseReserve = new BN(0);
+      }
+
+      // If curve ran out of segments before spending all quote, adjust spent quote and fee
+      if (remainingNetQuote.gt(new BN(0))) {
+        const actualNetQuoteIn = netQuoteIn.sub(remainingNetQuote);
+        const actualFee = actualNetQuoteIn.mul(new BN(feeBps)).div(BPS_DENOMINATOR.sub(new BN(feeBps)));
+        const actualGrossQuoteIn = actualNetQuoteIn.add(actualFee);
+        stepFeeTotal = actualFee;
+        totalVolumeQuote = totalVolumeQuote.add(actualGrossQuoteIn);
+        walletBalances[walletId]!.base = walletBalances[walletId]!.base.add(totalAmountOut);
+        walletBalances[walletId]!.quoteSpent = walletBalances[walletId]!.quoteSpent.add(actualGrossQuoteIn);
+      } else {
+        totalVolumeQuote = totalVolumeQuote.add(amountInRemaining);
+        walletBalances[walletId]!.base = walletBalances[walletId]!.base.add(totalAmountOut);
+        walletBalances[walletId]!.quoteSpent = walletBalances[walletId]!.quoteSpent.add(amountInRemaining);
+      }
     } else {
       // Sell: base tokens in, quote tokens out
       let remainingBaseIn = amountInRemaining;
@@ -133,6 +153,17 @@ export function simulateTrades(
           seg.liquidity
         );
 
+        if (maxBaseInSeg.isZero()) {
+          // Reached lower bound of current segment
+          if (currentSegmentIdx > 0) {
+            currentSegmentIdx--;
+            continue;
+          } else {
+            // Already at lowest price of segment 0; cannot absorb more base tokens
+            break;
+          }
+        }
+
         if (remainingBaseIn.gte(maxBaseInSeg)) {
           // Cross downwards
           const quoteOut = getQuoteAmountForLiquidity(
@@ -146,7 +177,12 @@ export function simulateTrades(
           remainingBaseIn = remainingBaseIn.sub(maxBaseInSeg);
 
           currentSqrtPrice = seg.lowerSqrtPrice;
-          if (currentSegmentIdx > 0) currentSegmentIdx--;
+          if (currentSegmentIdx > 0) {
+            currentSegmentIdx--;
+          } else {
+            // Lower bound of segment 0 reached; break to prevent infinite loop
+            break;
+          }
         } else {
           // Partial sell within segment
           const nextSqrtPrice = getNextSqrtPriceFromBaseIn(
@@ -168,13 +204,18 @@ export function simulateTrades(
         }
       }
 
+      if (quoteReserve.isNeg()) {
+        quoteReserve = new BN(0);
+      }
+
       // Fee on sell taken from quote out
       const feeBps = config.fee.feeSchedulerParam.startingFeeBps;
       stepFeeTotal = grossQuoteOut.mul(new BN(feeBps)).div(BPS_DENOMINATOR);
       totalAmountOut = grossQuoteOut.sub(stepFeeTotal);
 
+      const actualBaseIn = amountInRemaining.sub(remainingBaseIn);
       totalVolumeQuote = totalVolumeQuote.add(grossQuoteOut);
-      walletBalances[walletId]!.base = walletBalances[walletId]!.base.sub(trade.amount);
+      walletBalances[walletId]!.base = walletBalances[walletId]!.base.sub(actualBaseIn);
       walletBalances[walletId]!.quoteSpent = walletBalances[walletId]!.quoteSpent.sub(totalAmountOut);
     }
 
@@ -197,15 +238,16 @@ export function simulateTrades(
       const qInDec = new Decimal(trade.amount.toString()).div(Math.pow(10, quoteDecimals));
       const bOutDec = new Decimal(totalAmountOut.toString()).div(Math.pow(10, baseDecimals));
       effectivePrice = qInDec.div(bOutDec).toNumber();
-    } else if (trade.direction === "sell" && !trade.amount.isZero()) {
+    } else if (trade.direction === "sell" && !trade.amount.isZero() && !totalAmountOut.isZero()) {
       const qOutDec = new Decimal(totalAmountOut.toString()).div(Math.pow(10, quoteDecimals));
       const bInDec = new Decimal(trade.amount.toString()).div(Math.pow(10, baseDecimals));
       effectivePrice = qOutDec.div(bInDec).toNumber();
     }
 
-    const priceImpactBps = Math.round(
-      Math.abs((spotPriceAfter - spotPriceBefore) / spotPriceBefore) * 10000
-    );
+    const priceImpactBps =
+      spotPriceBefore > 0
+        ? Math.round(Math.abs((spotPriceAfter - spotPriceBefore) / spotPriceBefore) * 10000)
+        : 0;
 
     // Check graduation condition
     if (!isGraduated && quoteReserve.gte(config.migrationQuoteThreshold)) {
@@ -248,23 +290,27 @@ export function simulateTrades(
     totalFeesPartner
   );
 
-  const quoteProgressPercent = Math.min(
-    100,
-    new Decimal(quoteReserve.toString())
-      .div(new Decimal(config.migrationQuoteThreshold.toString()))
-      .mul(100)
-      .toNumber()
-  );
+  const quoteProgressPercent = config.migrationQuoteThreshold.isZero()
+    ? 0
+    : Math.min(
+        100,
+        new Decimal(quoteReserve.toString())
+          .div(new Decimal(config.migrationQuoteThreshold.toString()))
+          .mul(100)
+          .toNumber()
+      );
 
   const totalBaseAllocated = config.segments.reduce((acc, s) => acc.add(s.baseAmount), new BN(0));
   const baseSold = totalBaseAllocated.sub(baseReserve);
-  const baseProgressPercent = Math.min(
-    100,
-    new Decimal(baseSold.toString())
-      .div(new Decimal(totalBaseAllocated.toString()))
-      .mul(100)
-      .toNumber()
-  );
+  const baseProgressPercent = totalBaseAllocated.isZero()
+    ? 0
+    : Math.min(
+        100,
+        new Decimal(baseSold.toString())
+          .div(new Decimal(totalBaseAllocated.toString()))
+          .mul(100)
+          .toNumber()
+      );
 
   return {
     steps,
@@ -302,7 +348,7 @@ function calculateMetrics(
     if (step.spotPriceAfter > runningPeak) {
       runningPeak = step.spotPriceAfter;
     }
-    const dd = (runningPeak - step.spotPriceAfter) / runningPeak;
+    const dd = runningPeak > 0 ? (runningPeak - step.spotPriceAfter) / runningPeak : 0;
     if (dd > maxDrawdown) maxDrawdown = dd;
   }
 
@@ -321,7 +367,10 @@ function calculateMetrics(
 
   const avgEntryPrice = totalBaseBought.isZero()
     ? initialPrice
-    : totalQuoteSpent.div(quoteDecFactor).div(totalBaseBought.div(baseDecFactor)).toNumber();
+    : Math.max(
+        0,
+        totalQuoteSpent.div(quoteDecFactor).div(totalBaseBought.div(baseDecFactor)).toNumber()
+      );
 
   // 3. Fairness Score (Gini Coefficient over held token balances)
   const balances = Object.values(walletBalances)

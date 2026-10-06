@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { DBCConfig, simulateTrades, TradeInput, SimulationResult } from "@curve-studio/core";
 import BN from "bn.js";
 import Decimal from "decimal.js";
-import { Play, Plus, Trash2, ArrowUpRight, ArrowDownRight, RefreshCw } from "lucide-react";
+import { Play, Plus, Trash2, ArrowUpRight, ArrowDownRight, RefreshCw, Loader2, AlertTriangle } from "lucide-react";
 
 interface ScenarioRunnerProps {
   config: DBCConfig;
@@ -25,25 +25,40 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
   ]);
 
   const [simResult, setSimResult] = useState<SimulationResult | null>(null);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simError, setSimError] = useState<string | null>(null);
 
   const runSimulation = () => {
+    setIsSimulating(true);
+    setSimError(null);
     try {
       const quoteDecimals = config.token.quoteDecimals;
       const baseDecimals = config.token.baseDecimals;
 
-      const formattedTrades: TradeInput[] = trades.map((t) => {
-        const decimals = t.direction === "buy" ? quoteDecimals : baseDecimals;
-        const rawAmount = new Decimal(t.amount || "0").mul(10 ** decimals).toFixed(0);
-        return {
-          direction: t.direction,
-          amount: new BN(rawAmount),
-        };
-      });
+      const formattedTrades: TradeInput[] = trades
+        .filter((t) => parseFloat(t.amount || "0") > 0)
+        .map((t) => {
+          const decimals = t.direction === "buy" ? quoteDecimals : baseDecimals;
+          const rawAmount = new Decimal(t.amount || "0").mul(10 ** decimals).toFixed(0);
+          return {
+            direction: t.direction,
+            amount: new BN(rawAmount),
+          };
+        });
+
+      if (formattedTrades.length === 0) {
+        setSimError("Please add at least one trade with an amount greater than 0.");
+        setIsSimulating(false);
+        return;
+      }
 
       const result = simulateTrades(config, formattedTrades);
       setSimResult(result);
     } catch (err: any) {
       console.error("Simulation run error:", err);
+      setSimError(err?.message || "Failed to execute trade simulation.");
+    } finally {
+      setIsSimulating(false);
     }
   };
 
@@ -100,14 +115,26 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
           </button>
           <button
             type="button"
+            disabled={isSimulating}
             onClick={runSimulation}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-meteora text-slate-950 font-semibold text-xs hover:bg-cyan-300 transition-all shadow-md shadow-brand-meteora/20"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-meteora text-slate-950 font-semibold text-xs hover:bg-cyan-300 transition-all shadow-md shadow-brand-meteora/20 disabled:opacity-50"
           >
-            <Play className="h-3.5 w-3.5 fill-current" />
-            Run Scenario
+            {isSimulating ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Play className="h-3.5 w-3.5 fill-current" />
+            )}
+            {isSimulating ? "Simulating..." : "Run Scenario"}
           </button>
         </div>
       </div>
+
+      {simError && (
+        <div className="rounded-lg bg-red-950/40 border border-red-800/40 p-3 text-xs text-red-300 flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+          <span>{simError}</span>
+        </div>
+      )}
 
       {/* Trade Inputs Row */}
       <div className="space-y-2">

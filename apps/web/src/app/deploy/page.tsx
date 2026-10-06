@@ -7,6 +7,7 @@ import { PublicKey } from "@solana/web3.js";
 import { ALL_PRESETS, getPresetById, instantiatePreset } from "@curve-studio/presets";
 import { validateDBCConfig, DBCConfig } from "@curve-studio/core";
 import { DbcAdapter } from "@curve-studio/chain";
+import { useNetwork } from "@/components/WalletProvider";
 import {
   Rocket,
   ShieldAlert,
@@ -25,8 +26,8 @@ function DeployContent() {
 
   const { connection } = useConnection();
   const { publicKey, sendTransaction, connected } = useWallet();
+  const { network, setNetwork } = useNetwork();
 
-  const [network, setNetwork] = useState<"devnet" | "mainnet-beta">("devnet");
   const [mainnetConfirmText, setMainnetConfirmText] = useState("");
   const [deployStep, setDeployStep] = useState<number>(1);
   const [isDeploying, setIsDeploying] = useState(false);
@@ -61,6 +62,16 @@ function DeployContent() {
     setErrorMessage(null);
 
     try {
+      // Check pre-flight SOL balance
+      const balanceLamports = await connection.getBalance(publicKey);
+      if (balanceLamports < 0.02 * 1e9) {
+        setErrorMessage(
+          `Insufficient SOL balance (${(balanceLamports / 1e9).toFixed(4)} SOL). DBC deployment requires at least ~0.05 SOL to pay for account rent and fees on ${network.toUpperCase()}. Please fund your wallet.`
+        );
+        setIsDeploying(false);
+        return;
+      }
+
       const adapter = new DbcAdapter(connection);
 
       // Step 1: Build & send Create Config Transaction
@@ -69,18 +80,30 @@ function DeployContent() {
         payer: publicKey,
       });
 
+      const { blockhash: cfgBlockhash, lastValidBlockHeight: cfgBlockHeight } =
+        await connection.getLatestBlockhash("confirmed");
+      configRes.transaction.recentBlockhash = cfgBlockhash;
       configRes.transaction.feePayer = publicKey;
       configRes.transaction.partialSign(configRes.configKeypair);
 
       const cfgSig = await sendTransaction(configRes.transaction, connection);
-      await connection.confirmTransaction(cfgSig, "confirmed");
+      await connection.confirmTransaction(
+        {
+          signature: cfgSig,
+          blockhash: cfgBlockhash,
+          lastValidBlockHeight: cfgBlockHeight,
+        },
+        "confirmed"
+      );
       setConfigTxSig(cfgSig);
 
       // Step 2: Build & send Create Pool Transaction
       setDeployStep(2);
       const quoteMint =
         config.token.quoteDecimals === 6
-          ? new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v") // USDC
+          ? network === "mainnet-beta"
+            ? new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v") // USDC mainnet
+            : new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU") // USDC devnet
           : new PublicKey("So11111111111111111111111111111111111111112"); // WSOL
 
       const poolRes = await adapter.buildCreatePoolTx({
@@ -93,18 +116,32 @@ function DeployContent() {
         quoteMint,
       });
 
+      const { blockhash: poolBlockhash, lastValidBlockHeight: poolBlockHeight } =
+        await connection.getLatestBlockhash("confirmed");
+      poolRes.transaction.recentBlockhash = poolBlockhash;
       poolRes.transaction.feePayer = publicKey;
       poolRes.transaction.partialSign(poolRes.baseMintKeypair);
 
       const pSig = await sendTransaction(poolRes.transaction, connection);
-      await connection.confirmTransaction(pSig, "confirmed");
+      await connection.confirmTransaction(
+        {
+          signature: pSig,
+          blockhash: poolBlockhash,
+          lastValidBlockHeight: poolBlockHeight,
+        },
+        "confirmed"
+      );
       setPoolTxSig(pSig);
       setCreatedPoolAddress(poolRes.poolAddress.toBase58());
 
       setDeployStep(3);
     } catch (err: any) {
       console.error("Deploy error:", err);
-      setErrorMessage(err?.message || "Failed to deploy transaction.");
+      let msg = err?.message || "Failed to deploy transaction.";
+      if (msg.includes("prior credit") || msg.includes("insufficient funds")) {
+        msg = `Insufficient funds: Wallet lacks sufficient SOL to pay for account rent on ${network.toUpperCase()}.`;
+      }
+      setErrorMessage(msg);
     } finally {
       setIsDeploying(false);
     }

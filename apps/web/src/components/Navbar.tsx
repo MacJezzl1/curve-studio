@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Activity, Layers, Rocket, TrendingUp, DollarSign, ShieldCheck } from "lucide-react";
 
+import { useNetwork } from "./WalletProvider";
+
 // Dynamic import to prevent SSR hydration mismatches on wallet button
 const WalletMultiButton = dynamic(
   () =>
@@ -17,6 +19,7 @@ const WalletMultiButton = dynamic(
 
 export const Navbar = () => {
   const pathname = usePathname();
+  const { network, setNetwork } = useNetwork();
 
   const navLinks = [
     { href: "/", label: "Studio", icon: Activity },
@@ -74,10 +77,23 @@ export const Navbar = () => {
 
         {/* Right Section: Network Badge + Wallet */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Devnet
-          </div>
+          <button
+            type="button"
+            title="Click to toggle network"
+            onClick={() => setNetwork(network === "devnet" ? "mainnet-beta" : "devnet")}
+            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium cursor-pointer transition-all hover:scale-105 ${
+              network === "mainnet-beta"
+                ? "border-red-500/30 bg-red-500/10 text-red-400"
+                : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+            }`}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full animate-pulse ${
+                network === "mainnet-beta" ? "bg-red-400" : "bg-emerald-400"
+              }`}
+            />
+            {network === "mainnet-beta" ? "Mainnet" : "Devnet"}
+          </button>
 
           <WalletMultiButton className="!h-9 !py-0 !px-4 !text-xs !font-semibold !rounded-lg !bg-blue-600 hover:!bg-blue-500 transition-all" />
         </div>

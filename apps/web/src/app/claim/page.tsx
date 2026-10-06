@@ -115,8 +115,19 @@ export default function ClaimFeesPage() {
         });
       }
 
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+      tx.transaction.recentBlockhash = blockhash;
+      tx.transaction.feePayer = publicKey;
+
       const sig = await sendTransaction(tx.transaction, connection);
-      await connection.confirmTransaction(sig, "confirmed");
+      await connection.confirmTransaction(
+        {
+          signature: sig,
+          blockhash,
+          lastValidBlockHeight,
+        },
+        "confirmed"
+      );
       setTxSig(sig);
     } catch (err: any) {
       console.error("Claim fee error:", err);

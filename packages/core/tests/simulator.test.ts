@@ -74,4 +74,19 @@ describe("Bonding Curve Simulator & Metrics", () => {
     expect(result.steps.length).toBe(6);
     expect(result.peakPrice).toBeGreaterThan(result.initialPrice);
   });
+
+  it("safely handles sell trade exhausting pool without freezing or infinite loop", () => {
+    const stressTrades = [
+      { direction: "buy" as const, amount: new BN(5_000_000_000), walletId: "user_1" }, // 5 SOL
+      { direction: "buy" as const, amount: new BN(15_000_000_000), walletId: "user_2" }, // 15 SOL
+      { direction: "sell" as const, amount: new BN("2000000000000"), walletId: "user_3" }, // 2M tokens
+      { direction: "buy" as const, amount: new BN(30_000_000_000), walletId: "user_4" }, // 30 SOL
+    ];
+    const result = simulateTrades(config, stressTrades);
+    expect(result.steps.length).toBe(4);
+    expect(result.steps[2]!.direction).toBe("sell");
+    expect(result.steps[2]!.spotPriceAfter).toBeLessThanOrEqual(result.steps[1]!.spotPriceAfter);
+    expect(Number.isFinite(result.metrics.effectiveAverageEntryPrice)).toBe(true);
+    expect(Number.isFinite(result.metrics.maxDrawdownPercent)).toBe(true);
+  });
 });
